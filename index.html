@@ -405,7 +405,7 @@ const M=()=>$('main');
    Pega aquí la URL /exec de tu implementación de Apps Script (ver README).
    Vacío = modo local (sin servidor; el progreso vive en este navegador).
    Dentro de Apps Script se ignora y usa google.script.run automáticamente. */
-const API_URL='';
+const API_URL='https://script.google.com/macros/s/AKfycbzFzr5BCxuzzJEM7oKpmsSmP78fSoIMG9TSbDkPvGvEz4KSW8YMXiVp0DeutrpSF4sH/exec';
 const IN_GAS=(typeof google!=='undefined'&&!!google.script&&!!google.script.run);
 const MODE=IN_GAS?'gas':(API_URL?'remote':'demo');
 const DEMO=MODE==='demo';
