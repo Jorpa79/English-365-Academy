@@ -35,6 +35,7 @@ aside{background:#091525e6;border-right:1px solid #24354e;padding:14px;position:
 main{padding:22px;max-width:1300px;width:100%}
 .backdrop{position:fixed;inset:0;background:#0009;z-index:55}
 .mobile-bottom{display:none}
+.dt-in.ok{border-color:var(--ok);background:#052e1680}.dt-in.bad{border-color:var(--danger);background:#450a0a80}.dt-ans{margin:6px 0 2px;padding:6px 10px;border-radius:8px;background:#422006;color:#fde68a;font-weight:700}.dtclock.late,#dtClock.late{color:var(--warn)}
 .routine{display:flex;gap:12px;align-items:flex-start;text-align:left;background:#0a1627;border:1px solid #334b69;color:#fff;font-weight:600;padding:13px}
 .routine:hover{border-color:var(--accent)}.routine b{display:block;margin-bottom:2px}.routine .muted{font-size:13px;font-weight:400;display:block}
 .routine .ri{flex:none;width:34px;height:34px;border-radius:10px;background:#1d2d45;display:grid;place-items:center;font-size:17px}
@@ -118,7 +119,7 @@ pre.plan{white-space:pre-wrap;background:#07111f;border:1px solid var(--line);pa
    RPC). Si se abre fuera de Apps Script, arranca en MODO DEMO local.
    Formato de frase: [inglés, pronunciación aproximada, español]
    ===================================================================== */
-const APP_VERSION='5.1.0';
+const APP_VERSION='5.2.0';
 const TRACKS={
  kids:{name:{es:'Niños 10–12'},minutes:18,cefr:'A1',goal:{es:'Base A1 oral y comprensiva'}},
  teens:{name:{es:'Adolescentes 13–17'},minutes:25,cefr:'A2',goal:{es:'A1/A2 funcional'}},
@@ -559,7 +560,7 @@ function renderChrome(){
   $('demoHint').textContent=DEMO?t('demoHint'):'';$('demoBanner').textContent=t('demoBanner');$('demoBanner').classList.toggle('hidden',!DEMO);
   if(B){$('roleChip').textContent=B.user.name+' · '+t('role_'+B.user.role);$('trackChip').textContent=L(TRACKS[activeTrack()].name);renderNav()}
 }
-const NAVPARENT={translate:'library',vocab:'library',idioms:'library',verbs:'library',topics:'library',readings:'library',fichas:'library'};
+const NAVPARENT={dictado:'library',translate:'library',vocab:'library',idioms:'library',verbs:'library',topics:'library',readings:'library',fichas:'library'};
 const NAV=['home','today','ai','library','writing','listening','speak','roleplay','review','weekly','skills','route','modules','achievements','kit','iphone','settings'];
 const BOTTOM=[['home','🏠','mb_home'],['today','▶️','mb_today'],['ai','🤖','mb_ai'],['library','📚','mb_library']];
 function renderNav(){
@@ -571,7 +572,7 @@ function renderNav(){
 function renderBottom(){const main4=BOTTOM.map(x=>x[0]),cp=NAVPARENT[currentPage]||currentPage;$('mobileBottom').innerHTML=BOTTOM.map(([p,ic,k])=>`<button class="mobile-navbtn ${p===cp?'active':''}" onclick="go('${p}')"><span class="ico">${ic}</span><span>${t(k)}</span></button>`).join('')+`<button class="mobile-navbtn ${main4.includes(cp)?'':'active'}" onclick="toggleNav()" aria-label="${t('mb_more')}"><span class="ico">☰</span><span>${t('mb_more')}</span></button>`}
 function toggleNav(){const o=!$('aside').classList.contains('open');$('aside').classList.toggle('open',o);$('backdrop').classList.toggle('hidden',!o)}
 function closeNav(){$('aside').classList.remove('open');$('backdrop').classList.add('hidden')}
-function go(p){if(!PAGES[p])p='home';if(p==='teacher'&&!['teacher','admin'].includes(B.user.role))p='home';if(p==='admin'&&B.user.role!=='admin')p='home';currentPage=p;REG=[];closeNav();renderNav();PAGES[p]();window.scrollTo(0,0)}
+function go(p){dtStopTick();if(!PAGES[p])p='home';if(p==='teacher'&&!['teacher','admin'].includes(B.user.role))p='home';if(p==='admin'&&B.user.role!=='admin')p='home';currentPage=p;REG=[];closeNav();renderNav();PAGES[p]();window.scrollTo(0,0)}
 function stat(i,v,x){return `<div class="card stat"><span aria-hidden="true">${i}</span><strong>${h(v)}</strong><span class="muted">${h(x)}</span></div>`}
 const SKILLS={listening:'Listening',speaking:'Speaking',vocabulary:'Vocabulary',comprehension:'Comprehension',conversation:'Conversation',writing:'Writing'};
 function skillBars(s){return Object.keys(SKILLS).map(k=>{const v=Math.max(0,Math.min(100,Number(s[k]||0)));return `<div class="skill"><span>${SKILLS[k]}</span><div class="progress" role="progressbar" aria-valuenow="${v}" aria-valuemin="0" aria-valuemax="100"><div style="width:${v}%"></div></div><b>${v}</b></div>`}).join('')}
@@ -1141,6 +1142,7 @@ function closeness(user,expected){return Math.max(...variantsOf(expected).map(v=
 const LIBTILES=[
   ['translate','🔁','Traducción inversa','sentence','oraciones de tus repasos del curso: tradúcelas al inglés'],
   ['vocab','🧱','Vocabulario','vocab','ladrillos de vocabulario con audio y pronunciación'],
+  ['dictado','✍️','Dictado de vocabulario','vocab','palabras: estudia la lista y escribe inglés, significado y pronunciación'],
   ['idioms','💡','Modismos','idiom','expresiones con significado, definición y ejemplo'],
   ['verbs','🔤','Verbos y contracciones','verb','conjugación, irregulares, modales y contracciones'],
   ['topics','💬','Temas conversacionales','convo','intervenciones de tus temas: practícalos como conversación'],
@@ -1218,15 +1220,16 @@ function trNext(){
 /* ============================ Vocabulario y modismos (tarjetas) ============================ */
 let FC=null;
 async function vocab(){
+  if(DT&&DT.phase!=='done'&&DT.phase!=='setup'){if(DT.phase==='write'&&!DT.reveal)return dtNextWord(true);if(DT.phase==='study'){DT.phase='setup'}return renderDT()}
   if(FC&&FC.tipo==='vocab'&&!FC.done)return renderFC();
   libLoading('🧱 Vocabulario');
   let items;try{items=await lib('vocab')}catch(e){return libError('🧱 Vocabulario',e)}
   if(currentPage!=='vocab')return;
   const mods=groupsOf(items).reduce((m,[g,xs])=>{const k=g.replace(/B\d+$/,'');(m[k]=m[k]||[]).push([g,xs]);return m},{});
   const modName={M1:'Módulo 1',M2:'Módulo 2',M3:'Módulo 3',M4:'Módulo 4',M5:'Módulo 5',M6:'Módulo 6',M7:'Módulo 7',S7:'Semana 7',S8:'Semana 8'};
-  M().innerHTML=`<div class="row between"><h1>🧱 Vocabulario</h1>${back()}</div><p>Elige un bloque de tus ladrillos. En <b>Tarjetas</b> ves la palabra en español, la dices en inglés y volteas; en <b>Escribir</b> la escribes. Las que no sepas se agregan a Repaso automáticamente.</p>
-  <label>Modo</label><div class="seg">${[['cards','Tarjetas'],['write','Escribir']].map(([v,l])=>`<button class="${(LS().fcMode||'cards')===v?'on':''}" onclick="LSset(d=>{d.fcMode='${v}'});go('vocab')">${l}</button>`).join('')}</div>
-  ${Object.entries(mods).map(([k,gs])=>`<h2 class="mt">${modName[k]||k}</h2><div class="grid modules">${gs.map(([g,xs])=>`<button class="routine" onclick="fcStart('vocab',${R(g)})"><span class="ri">${h(g.slice(-2))}</span><span class="grow"><b>${h((xs[0].extra.topic||g).split(' · ')[0])}</b><span class="muted">${xs.length} palabras ${bestBadge('vocab',g)}</span></span></button>`).join('')}</div>`).join('')}`;
+  M().innerHTML=`<div class="row between"><h1>🧱 Vocabulario</h1>${back()}</div><p>Elige un bloque de tus ladrillos. En <b>Tarjetas</b> ves la palabra en español, la dices en inglés y volteas; en <b>Escribir</b> la escribes; en <b>Dictado</b> estudias la lista y luego escribes de memoria el inglés, el significado y la pronunciación. Las que no sepas se agregan a Repaso automáticamente.</p>
+  <label>Modo</label><div class="seg">${[['cards','Tarjetas'],['write','Escribir'],['dict','Dictado']].map(([v,l])=>`<button class="${(LS().fcMode||'cards')===v?'on':''}" onclick="LSset(d=>{d.fcMode='${v}'});go('vocab')">${l}</button>`).join('')}</div>
+  ${Object.entries(mods).map(([k,gs])=>`<h2 class="mt">${modName[k]||k}</h2><div class="grid modules">${gs.map(([g,xs])=>`<button class="routine" onclick="${(LS().fcMode||'cards')==='dict'?'dtSetup':'fcStart'}(${(LS().fcMode||'cards')==='dict'?'':"'vocab',"}${R(g)})"><span class="ri">${h(g.slice(-2))}</span><span class="grow"><b>${h((xs[0].extra.topic||g).split(' · ')[0])}</b><span class="muted">${xs.length} palabras ${bestBadge('vocab',g)}</span></span></button>`).join('')}</div>`).join('')}`;
 }
 let IDQ='';
 function idiomOfDay(items){const d=new Date(),n=d.getFullYear()*372+d.getMonth()*31+d.getDate();return items[n%items.length]}
@@ -1474,10 +1477,113 @@ function renderFicha(x){
 async function fiAI(i){const x=(await lib('ficha')).find(y=>y.id===REG[i]);if(!x)return;
   aiStartCustom(`Grammar/vocabulary practice about "${x.en}". Use these notes from the learner's course as the basis: """${x.es.slice(0,1500)}""". Give short exercises one at a time (e.g. "complete", "choose", "translate", "make your own sentence"), wait for the answer, correct it briefly and move on. Mix in natural conversation.`,'Ficha: '+x.en,'📝')}
 
+/* ============================ Dictado de vocabulario ============================
+   1) Estudias la lista (inglés, pronunciación y español) con tiempo.
+   2) Escuchas cada palabra y escribes: inglés, significado en español y pronunciación.
+   No avanzas hasta que las 3 estén bien. Si se acaba el tiempo, ves la respuesta,
+   la copias correctamente, cuenta como error y la palabra vuelve al final. */
+let DT=null,DTICK=null;
+function dtStopTick(){if(DTICK){clearInterval(DTICK);DTICK=null}}
+const dtEligible=x=>x.en&&x.es&&!/[→+]/.test(x.en);
+const stripAcc=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'');
+function canonEn(s){return String(s).toLowerCase().replace(/[’‘`´]/g,"'").replace(/[.,!?¡¿;:"“”]/g,' ').replace(/\s+/g,' ').trim()}
+function canonEs(s){return stripAcc(String(s).toLowerCase()).replace(/[.,!?¡¿;:"“”]/g,' ').replace(/\s+/g,' ').trim().replace(/^(el|la|los|las|un|una|unos|unas)\s+/,'')}
+function canonPr(s){return String(s).toLowerCase().replace(/[\/\s\-]/g,'')}
+function dtEnOk(a,en){const c=canonEn(a);return !!c&&variantsOf(en).some(v=>canonEn(v)===c)}
+function dtEsOk(a,es){const c=canonEs(a);if(!c)return false;const alts=String(es).split(/\s+[\/\-–]\s+|\s*\/\s*/).flatMap(variantsOf);return alts.some(v=>canonEs(v)===c)}
+function dtPrOk(a,pr){if(!pr)return true;const c=canonPr(a);return !!c&&c===canonPr(pr)}
+const dtSay=(x,slow)=>speakText(x.en.split(' / ')[0].replace(/\(([^)]*)\)/g,'$1'),slow?{rate:.6}:{});
+function dictado(){LSset(d=>{d.fcMode='dict'});go('vocab')}
+async function dtSetup(gi){
+  const g=REG[gi],items=(await lib('vocab')).filter(x=>x.grupo===g&&dtEligible(x));
+  if(!items.length){toast('Este bloque no tiene palabras para dictado.');return}
+  const st=LS().dtCfg||{size:10,study:120,word:60};
+  DT={grupo:g,title:(items[0].extra.topic||g).split(' · ')[0],all:items,size:st.size,studySec:st.study,wordSec:st.word,phase:'setup'};renderDT();
+}
+function dtCfg(k,v){DT[k]=v;LSset(d=>{d.dtCfg={size:DT.size,study:DT.studySec,word:DT.wordSec}});renderDT()}
+function dtBeginStudy(){
+  const n=DT.size==='all'?DT.all.length:Math.min(DT.size,DT.all.length);
+  DT.list=shuffle(DT.all).slice(0,n);DT.phase='study';DT.left=DT.studySec;DT.started=Date.now();DT.firstOk=0;DT.failed=new Set();DT.tried=new Set();
+  renderDT();dtStopTick();DTICK=setInterval(()=>{if(currentPage!=='vocab'||!DT||DT.phase!=='study')return dtStopTick();DT.left--;const c=$('dtClock');if(c)c.textContent=fmtSec(DT.left);if(DT.left<=0)dtBeginWrite()},1000);
+}
+const fmtSec=s=>Math.floor(Math.max(0,s)/60)+':'+String(Math.max(0,s)%60).padStart(2,'0');
+async function dtPlayAll(){const D=DT;for(const x of D.list){if(DT!==D||D.phase!=='study'||currentPage!=='vocab')return;await dtSay(x);await new Promise(r=>setTimeout(r,400))}}
+function dtBeginWrite(){dtStopTick();speechSynthesis.cancel();DT.phase='write';DT.queue=shuffle(DT.list.map((_,i)=>i));DT.reveal=false;dtNextWord(true)}
+function dtNextWord(first){
+  if(!first)DT.queue.shift();
+  if(!DT.queue.length)return dtFinish();
+  DT.reveal=false;DT.left=DT.wordSec;renderDT();const x=DT.list[DT.queue[0]];setTimeout(()=>dtSay(x),250);
+  dtStopTick();DTICK=setInterval(()=>{if(currentPage!=='vocab'||!DT||DT.phase!=='write'||DT.reveal)return dtStopTick();DT.left--;const c=$('dtClock');if(c){c.textContent=fmtSec(DT.left);c.classList.toggle('late',DT.left<=10)}if(DT.left<=0)dtTimeout()},1000);
+}
+function dtVals(){return {en:($('dtEn')||{}).value||'',es:($('dtEs')||{}).value||'',pr:($('dtPr')||{}).value||''}}
+function dtMark(id,ok){const el=$(id);if(el){el.classList.toggle('ok',ok);el.classList.toggle('bad',!ok)}}
+function dtCheck(){
+  const i=DT.queue[0],x=DT.list[i],v=dtVals();
+  const r={en:dtEnOk(v.en,x.en),es:dtEsOk(v.es,x.es),pr:dtPrOk(v.pr,x.pron)};
+  dtMark('dtEn',r.en);dtMark('dtEs',r.es);if(x.pron)dtMark('dtPr',r.pr);
+  const msg=$('dtMsg');
+  if(r.en&&r.es&&r.pr){
+    dtStopTick();
+    if(!DT.reveal&&!DT.tried.has(i)){DT.firstOk++}
+    DT.tried.add(i);
+    msg.innerHTML=`<div class="notice" style="border-color:var(--ok)">✓ ¡Correcto! ${DT.reveal?'Esta palabra volverá al final para que la escribas sin ayuda.':''}</div>`;
+    if(DT.reveal)DT.queue.push(i);
+    $('dtBtn').disabled=true;setTimeout(()=>{if(DT&&DT.phase==='write')dtNextWord()},DT.reveal?1600:900);
+  }else{
+    const bad=[!r.en&&'inglés',!r.es&&'español',!r.pr&&'pronunciación'].filter(Boolean);
+    msg.innerHTML=`<div class="notice warn">Revisa: ${bad.join(', ')}. ${DT.reveal?'Copia la respuesta tal como aparece.':'Corrige y vuelve a comprobar.'}</div>`;
+    const first=bad[0]==='inglés'?'dtEn':bad[0]==='español'?'dtEs':'dtPr';const el=$(first);if(el)el.focus();
+  }
+}
+function dtTimeout(){
+  dtStopTick();const i=DT.queue[0];DT.reveal=true;DT.failed.add(i);DT.tried.add(i);
+  const v=dtVals();renderDT();['dtEn','dtEs','dtPr'].forEach(id=>{const el=$(id);if(el){el.value=id==='dtEn'?v.en:id==='dtEs'?v.es:v.pr}});dtCheckSilent();
+}
+function dtCheckSilent(){const x=DT.list[DT.queue[0]],v=dtVals();dtMark('dtEn',dtEnOk(v.en,x.en));dtMark('dtEs',dtEsOk(v.es,x.es));if(x.pron)dtMark('dtPr',dtPrOk(v.pr,x.pron))}
+function dtFinish(){
+  dtStopTick();DT.phase='done';const n=DT.list.length;
+  DT.list.forEach((x,i)=>{if(DT.failed.has(i))toReview('lib_'+x.id,x.en,x.es,x.pron)});
+  savePractice('vocab','Dictado '+DT.grupo,'Dictado: '+DT.title,n,DT.firstOk,DT.started);renderDT();
+}
+function renderDT(){
+  const D=DT;const head=`<div class="row between"><h1>✍️ Dictado · ${h(D.title)}</h1><button class="ghost small" onclick="dtStopTick();DT=null;go('vocab')">← Bloques</button></div>`;
+  if(D.phase==='setup'){
+    const opt=(k,vals,lab)=>`<div class="seg">${vals.map(([v,l])=>`<button class="${D[k]===v?'on':''}" onclick="dtCfg('${k}',${typeof v==='string'?`'${v}'`:v})">${l}</button>`).join('')}</div>`;
+    M().innerHTML=head+`<div class="card"><p>Primero estudias la lista con su pronunciación y significado. Después escuchas cada palabra y escribes <b>cómo se escribe en inglés</b>, <b>qué significa en español</b> y <b>cómo se pronuncia</b>. No avanzas hasta tener las tres bien.</p>
+    <label>Palabras por ronda (el bloque tiene ${D.all.length})</label>${opt('size',[[10,'10'],[15,'15'],[20,'20'],['all','Todas']])}
+    <label>Tiempo para estudiar la lista</label>${opt('studySec',[[60,'1 min'],[120,'2 min'],[180,'3 min'],[300,'5 min']])}
+    <label>Tiempo para escribir cada palabra</label>${opt('wordSec',[[30,'30 s'],[45,'45 s'],[60,'60 s'],[90,'90 s']])}
+    <div class="notice mt">Al revisar: en inglés importa la ortografía; en español se aceptan sinónimos de la lista y no importan los acentos; en la pronunciación no importan las barras, los espacios, los guiones ni las mayúsculas, pero sí las letras y los acentos (/áim/).</div>
+    <button class="primary mt" onclick="dtBeginStudy()">Ver la lista y empezar</button></div>`;return}
+  if(D.phase==='study'){
+    M().innerHTML=head+`<div class="card"><div class="row between"><div><span class="muted">Tiempo para estudiar</span><div class="score" id="dtClock">${fmtSec(D.left)}</div></div><div class="row"><button class="ghost" onclick="dtPlayAll()">🔊 Escuchar todas</button><button class="primary" onclick="dtBeginWrite()">Estoy listo</button></div></div>
+    <div class="tablewrap mt"><table style="min-width:520px"><tr><th>#</th><th>Inglés</th><th>Pronunciación</th><th>Español</th><th></th></tr>${D.list.map((x,i)=>`<tr><td>${i+1}</td><td><b style="font-size:17px">${h(x.en)}</b></td><td class="phon" style="font-size:16px">${h(x.pron||'—')}</td><td>${h(x.es)}</td><td><button class="ghost small" aria-label="Escuchar" onclick="dtSay(DT.list[${i}])">🔊</button></td></tr>`).join('')}</table></div></div>`;return}
+  if(D.phase==='write'){
+    const i=D.queue[0],x=D.list[i],pending=D.queue.length,done=D.list.length-new Set(D.queue).size;
+    const rev=(t)=>D.reveal?`<div class="dt-ans">${h(t)}</div>`:'';
+    M().innerHTML=head+`<div class="card"><div class="row between"><span class="badge">${done} de ${D.list.length} listas · ${pending} por escribir</span><div class="row"><span class="muted">Tiempo</span><span class="score dtclock ${D.left<=10?'late':''}" id="dtClock" style="font-size:30px">${D.reveal?'0:00':fmtSec(D.left)}</span></div></div>
+    <div class="progress mt8"><div style="width:${pct(done,D.list.length)}%"></div></div>
+    <div class="row mt"><button class="primary" onclick="dtSay(DT.list[DT.queue[0]])">🔊 Escuchar</button><button class="ghost" onclick="dtSay(DT.list[DT.queue[0]],1)">🐢 Lento</button></div>
+    ${D.reveal?`<div class="notice warn mt">Se acabó el tiempo. Copia la respuesta correcta para continuar; esta palabra volverá al final de la lista.</div>`:''}
+    <div class="dt-fields">
+      <label for="dtEn">1. Cómo se escribe en inglés</label><input id="dtEn" class="dt-in" spellcheck="false" autocapitalize="off" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();$('dtEs').focus()}">${rev(x.en)}
+      <label for="dtEs">2. Qué significa en español</label><input id="dtEs" class="dt-in" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();${x.pron?"$('dtPr').focus()":'dtCheck()'}}">${rev(x.es)}
+      <label for="dtPr">3. Cómo se pronuncia</label>${x.pron?`<input id="dtPr" class="dt-in" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="ej. /uórk/" onkeydown="if(event.key==='Enter'){event.preventDefault();dtCheck()}">${rev(x.pron)}<div class="row mt8">${['á','é','í','ó','ú','ü'].map(c=>`<button class="ghost small" type="button" onmousedown="event.preventDefault()" onclick="dtIns('${c}')">${c}</button>`).join('')}</div>`:`<div class="muted">Esta palabra no tiene pronunciación en tu curso.</div>`}
+    </div>
+    <div class="row mt"><button class="success" id="dtBtn" onclick="dtCheck()">Comprobar</button></div><div id="dtMsg"></div></div>`;
+    const el=$('dtEn');if(el)el.focus();return}
+  const n=D.list.length,fails=[...D.failed].map(i=>D.list[i]);
+  M().innerHTML=head+`<div class="card"><div class="score">${pct(D.firstOk,n)}%</div><p>${D.firstOk} de ${n} palabras bien dentro del tiempo.${fails.length?' Las que fallaste se agregaron a Repaso.':' ¡Sin errores!'}</p>
+  ${fails.length?`<div class="tablewrap"><table style="min-width:480px"><tr><th>Inglés</th><th>Pronunciación</th><th>Español</th></tr>${fails.map(x=>`<tr><td><b>${h(x.en)}</b></td><td class="phon">${h(x.pron)}</td><td>${h(x.es)}</td></tr>`).join('')}</table></div>`:''}
+  <div class="row mt">${fails.length?`<button class="primary" onclick="dtRetryFails()">Repetir solo las falladas</button>`:''}<button class="${fails.length?'ghost':'primary'}" onclick="DT.phase='setup';renderDT()">Otra ronda</button><button class="ghost" onclick="DT=null;go('vocab')">Elegir otro bloque</button></div></div>`;
+}
+function dtIns(c){const el=document.activeElement&&document.activeElement.id==='dtPr'?document.activeElement:$('dtPr');if(!el)return;const s=el.selectionStart??el.value.length,e=el.selectionEnd??s;el.value=el.value.slice(0,s)+c+el.value.slice(e);el.focus();el.setSelectionRange(s+1,s+1)}
+function dtRetryFails(){const fails=[...DT.failed].map(i=>DT.list[i]);DT.all=fails;DT.size='all';dtBeginStudy()}
+
 /* ---------- Conversación con IA basada en tus materiales ---------- */
 function aiStartCustom(custom,title,icon){AIC=null;go('ai');aiStart('custom',{custom,title,icon})}
 
-const PAGES={home,today,ai,writing,listening,library,translate,vocab,idioms,verbs,topics,readings,fichas,skills,route,modules,speak,roleplay,review,weekly,achievements,kit,iphone,settings,teacher,admin};
+const PAGES={home,today,ai,writing,listening,library,translate,vocab,dictado,idioms,verbs,topics,readings,fichas,skills,route,modules,speak,roleplay,review,weekly,achievements,kit,iphone,settings,teacher,admin};
 
 
 /* Muestra mínima para el modo local (contenido propio, no del curso). Con el servidor conectado se usa tu hoja Biblioteca. */
