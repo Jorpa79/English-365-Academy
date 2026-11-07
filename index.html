@@ -96,12 +96,14 @@ pre.plan{white-space:pre-wrap;background:#07111f;border:1px solid var(--line);pa
 @media(max-width:1000px){.layout{grid-template-columns:1fr}.mobile-bottom{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:45;background:#07111ff5;border-top:1px solid #30435d;padding:7px 7px calc(7px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(14px)}main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}input,select,textarea{font-size:16px}aside{position:fixed;left:0;top:0;height:100vh;width:280px;z-index:60;background:#091525;transform:translateX(-102%);transition:transform .2s ease;padding-top:18px}aside.open{transform:none}.stats,.modules,.split{grid-template-columns:1fr 1fr}.top .desktop{display:none}}
 @media(max-width:680px){.stats,.modules,.split{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:1/-1}.stat strong{font-size:24px}.card{padding:16px}.steps{grid-template-columns:1fr 1fr}.skill{grid-template-columns:105px 1fr 40px}main{padding:14px 14px calc(96px + env(safe-area-inset-bottom,0px))}.top{padding-top:calc(10px + env(safe-area-inset-top,0px))}.phrase{font-size:21px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent,#38bdf8);font-weight:800;text-decoration:underline;cursor:pointer;font-size:inherit;min-height:0}
+.login-card+.login-card{margin-top:0}
 </style>
 </head>
 <body>
 <div id="demoBanner" class="demo-banner hidden"></div>
 
-<section id="loginView" class="login"><div class="login-card">
+<section id="loginView" class="login"><div class="login-card" id="loginCard">
   <div class="row between">
     <div class="brand"><div class="logo">E365</div><div><h1>English 365 Academy</h1><div class="muted" id="appSub"></div></div></div>
   </div>
@@ -111,6 +113,19 @@ pre.plan{white-space:pre-wrap;background:#07111f;border:1px solid var(--line);pa
   <div class="row" style="margin-top:16px"><button class="primary" id="btnLogin" onclick="login()"></button><button class="ghost" id="btnTest" onclick="testConnection()"></button></div>
   <p class="muted" id="demoHint" style="font-size:12px"></p>
   <div id="loginMsg" role="status"></div>
+  <p style="margin:14px 0 0">¿No tienes cuenta? <button class="linkbtn" onclick="toggleRegister(true)">Crear cuenta</button></p>
+</div>
+<div class="login-card hidden" id="regCard">
+  <h2 style="margin-top:0">Crear cuenta</h2>
+  <p class="muted" style="font-size:13px">Necesitas el código de invitación que te dio el administrador.</p>
+  <label for="regName">Nombre</label><input id="regName" autocomplete="name" maxlength="80">
+  <label for="regUser">Usuario</label><input id="regUser" autocomplete="username" maxlength="30" autocapitalize="none" spellcheck="false" placeholder="ej. jorge.p">
+  <label for="regPass">Contraseña (mínimo 6)</label><input id="regPass" type="password" autocomplete="new-password">
+  <label for="regPass2">Repite la contraseña</label><input id="regPass2" type="password" autocomplete="new-password">
+  <label for="regTrack">Mi ruta</label><select id="regTrack"><option value="adult">Adulto / Profesional (A2 → B1)</option><option value="b1">Conversación intermedia (B1)</option><option value="teacher">Avanzado docente (B2–C1)</option><option value="university">Universitario básico (A2)</option><option value="teens">Adolescentes 13–17</option><option value="kids">Niños 10–12</option></select>
+  <label for="regCode">Código de invitación</label><input id="regCode" autocomplete="off" autocapitalize="none">
+  <div class="row" style="margin-top:16px"><button class="primary" id="btnReg" onclick="registerSelf()">Crear cuenta</button><button class="ghost" onclick="toggleRegister(false)">← Ya tengo cuenta</button></div>
+  <div id="regMsg" role="status"></div>
 </div></section>
 
 <section id="appView" class="hidden">
@@ -131,7 +146,7 @@ pre.plan{white-space:pre-wrap;background:#07111f;border:1px solid var(--line);pa
    RPC). Si se abre fuera de Apps Script, arranca en MODO DEMO local.
    Formato de frase: [inglés, pronunciación aproximada, español]
    ===================================================================== */
-const APP_VERSION='5.3.0';
+const APP_VERSION='5.3.1';
 const TRACKS={
  kids:{name:{es:'Niños 10–12'},minutes:18,cefr:'A1',goal:{es:'Base A1 oral y comprensiva'}},
  teens:{name:{es:'Adolescentes 13–17'},minutes:25,cefr:'A2',goal:{es:'A1/A2 funcional'}},
@@ -548,6 +563,17 @@ function evalFree(answer,c,minW){
 function freeHTML(r){const bar=(k,v)=>`<div class="rub"><span>${t(k)}</span><div class="progress"><div style="width:${v}%"></div></div><b>${v}</b></div>`;return `<div class="lesson"><div class="row"><div class="score">${r.score}%</div><div class="grow muted">${h(r.text)}</div></div>${bar('fb_len',r.len)}${bar('fb_rel',r.rel)}${bar('fb_con',r.con)}${r.tips.map(x=>`<div class="notice">${h(x)}</div>`).join('')}<p class="muted" style="font-size:12px">${t('estNote')}</p></div>`}
 
 /* ============================ Login / sesión ============================ */
+function toggleRegister(on){$('loginCard').classList.toggle('hidden',on);$('regCard').classList.toggle('hidden',!on);$('regMsg').textContent='';(on?$('regName'):$('loginUser')).focus()}
+async function registerSelf(){
+  const m=$('regMsg'),d={name:$('regName').value.trim(),username:$('regUser').value.trim().toLowerCase(),password:$('regPass').value,track:$('regTrack').value,code:$('regCode').value.trim()};
+  if(!d.name||!d.username||!d.password||!d.code){m.textContent='Completa todos los campos.';return}
+  if(!/^[a-z0-9._-]{3,30}$/.test(d.username)){m.textContent='El usuario debe tener 3–30 caracteres: letras, números, punto, guion o guion bajo (sin espacios ni acentos).';return}
+  if(d.password.length<6){m.textContent='La contraseña debe tener al menos 6 caracteres.';return}
+  if(d.password!==$('regPass2').value){m.textContent='Las contraseñas no coinciden.';return}
+  const btn=$('btnReg');btn.disabled=true;m.textContent='Creando cuenta…';
+  try{const r=await rpc('registerUser',d);m.textContent=(r&&r.message)||'Error';if(r&&r.ok){$('loginUser').value=d.username;$('loginPass').value=d.password;toggleRegister(false);['regName','regUser','regPass','regPass2','regCode'].forEach(i=>$(i).value='');await login()}}
+  catch(e){m.textContent=e.message}finally{btn.disabled=false}
+}
 async function login(){
   const msg=$('loginMsg'),usr=$('loginUser').value.trim(),pwd=$('loginPass').value;
   if(!usr||!pwd){msg.textContent=t('fillLogin');return}
@@ -1620,7 +1646,7 @@ async function lectura(){
 function readings(){RL.tab='course';go('lectura')}
 function openStory(id){if(token)lib('vocab').catch(()=>{});const s=STORIES.find(x=>x.id===id);READ={kind:'story',id,title:s.title,sub:s.title_es+' · '+s.level+' · '+s.topic,sent:s.text.map(t=>({en:t[0],es:t[1],who:''})),gloss:s.glossary,questions:s.questions,level:s.level,tr:{},trAll:false,answers:{},checked:false,started:Date.now()};go('lectura')}
 async function openCourseReading(gi){const g=REG[gi],xs=(await lib('reading')).filter(x=>x.grupo===g);READ={kind:'course',id:g,title:xs[0].extra.title,sub:(xs[0].extra.kind==='dialogo'?'Diálogo':'Lectura')+' de tu curso',sent:xs.map(x=>({en:x.en,es:x.es,who:x.extra.who||''})),gloss:{},questions:null,tr:{},trAll:false,started:Date.now()};go('lectura')}
-function tokenizeHTML(en,si){let wi=0;return h(en).replace(/[A-Za-z][A-Za-z'’\-]*/g,m=>`<span class="tw" data-s="${si}" data-w="${wi++}">${m}</span>`)}
+function tokenizeHTML(en,si){let wi=0;return String(en).split(/([A-Za-z][A-Za-z'’\-]*)/).map((p,i)=>i%2?`<span class="tw" data-s="${si}" data-w="${wi++}">${h(p)}</span>`:h(p)).join('')}
 function rdFont(d){const f=Math.max(15,Math.min(26,(LS().rdFont||19)+d));LSset(x=>{x.rdFont=f});const t=$('rdText');if(t)t.style.fontSize=f+'px'}
 function renderReader(){
   const D=READ,font=LS().rdFont||19;
@@ -1877,6 +1903,7 @@ async function mockApi(fn,a){
   const need=()=>{if(!u)throw new Error('Sesión expirada. Vuelve a entrar.')};
   let out;
   switch(fn){
+    case 'registerUser':{const d=a[0]||{};if(String(d.code||'').toLowerCase()!=='demo365')return {ok:false,message:'El código de invitación no es correcto. (En modo local usa demo365)'};if(db.users[d.username])return {ok:false,message:'Ese usuario ya existe. Elige otro.'};db.users[d.username]={password:d.password,name:d.name,role:'student',track:d.track||'adult',active:true};saveDB(db);return {ok:true,message:'Cuenta creada. Entrando…'}}
     case 'loginUser':{const x=db.users[a[0]];if(!x||x.password!==a[1])return {ok:false,message:'Usuario o contraseña incorrectos.'};if(!x.active)return {ok:false,message:'Usuario inactivo.'};return {ok:true,token:'demo:'+a[0],bootstrap:demoBoot(db,a[0])}}
     case 'systemHealth':return {ok:true,version:APP_VERSION+' demo'};
     case 'logoutUser':return {ok:true};
